@@ -7,6 +7,13 @@
 (defun array-to-list (array)
   (map 'list (lambda (x) x) array))
 
+(defun find-vk-id-in-string (string)
+  (setq friend-id nil)
+  (setq p1 (posix-string-match "[0-9]+" string))
+  (setq p2 (match-end 0))
+  (when (and p1 p2)(setq friend-id (substring string p1 p2)))
+  friend-id)
+
 (defun vkontakte-get-friends-list ()
   (with-current-buffer
       (url-retrieve-synchronously (format vk_api_url "friends.get" (format "user_id=%s&order=hints&fields=first_name,last_name,online" profile_id) access_token))
@@ -63,9 +70,7 @@
   (setq p1 (line-beginning-position))
   (setq p2 (line-end-position))
   (setq line (buffer-substring-no-properties p1 p2))
-  (setq p1 (posix-string-match "[0-9]+" line))
-  (setq p2 (match-end 0))
-  (setq friend-id (substring line p1 p2))
+  (setq friend-id (find-vk-id-in-string line))
   friend-id)
 
 (defun vkontakte-draw-dialog-with-friend (friend-id)
@@ -84,6 +89,7 @@
 	    (insert-string "--------------------\n")
 	    (insert-string message-info)
 	    (insert-string "--------------------\n"))))
+  (local-set-key (kbd "C-c C-w") 'vkontakte-send)
   (switch-to-buffer vkontakte-dialog-buffer))
 
 (defun vkontakte-open-dialog-with-current-friend ()
@@ -107,4 +113,11 @@
 	(with-current-buffer vkontakte-friends-buffer
 	  (insert-string friend-info))
 	(local-set-key (kbd "C-c C-o") 'vkontakte-open-dialog-with-current-friend)
+	(local-set-key (kbd "C-c C-w") 'vkontakte-send)
 	(switch-to-buffer vkontakte-friends-buffer)))
+
+(defun vkontakte-send (message)
+  (interactive "Message:")
+  (setq friend-id (find-vk-id-in-string (buffer-name)))
+  (when (not friend-id) (setq friend-id (vkontakte-get-current-friend-id)))
+  (vkontakte-send-message friend-id message))
