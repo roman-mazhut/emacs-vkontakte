@@ -14,6 +14,23 @@
   (when (and p1 p2)(setq friend-id (substring string p1 p2)))
   friend-id)
 
+(defun vkontakte-get-username (user-id)
+  (with-current-buffer
+      (url-retrieve-synchronously (format vk_api_url "users.get" (format "user_ids=%s&fields=first_name,last_name" user-id) access_token))
+    (goto-char (point-min))
+    (search-forward "\n\n")
+    (delete-region (point-min) (point))
+    (setq user (json-read-from-string (buffer-string)))
+    (setq user (cdr (pop user)))
+    (setq user (array-to-list user))
+    (setq user (car user))
+    (when (consp user)
+      (setq first-name (decode-coding-string (cdr (assoc 'first_name user)) 'utf-8))
+      (setq last-name (decode-coding-string (cdr (assoc 'last_name user)) 'utf-8))
+      (format "%s %s"
+	      first-name
+	      last-name))))
+
 (defun vkontakte-get-friends-list ()
   (with-current-buffer
       (url-retrieve-synchronously (format vk_api_url "friends.get" (format "user_id=%s&order=hints&fields=first_name,last_name,online" profile_id) access_token))
@@ -78,13 +95,21 @@
   (set-buffer vkontakte-dialog-buffer)
   (erase-buffer)
   (setq vkontakte-message-history (vkontakte-get-messages-history friend-id))
+  (setq user-ids '())
   (loop for message being the elements of (reverse vkontakte-message-history)
 	do
 	(when (listp message)
-	  (setq message-info (format "%s %s: %s\n"
-				     (cdr (assoc 'read_state message))
-				     (cdr (assoc 'from_id message))
-				     (decode-coding-string (cdr (assoc 'body message)) 'utf-8)))
+	  (setq read_state (cdr (assoc 'read_state message)))
+	  (setq from_id (cdr (assoc 'from_id message)))
+	  (when (not (assoc (intern (format "%s" from_id)) user-ids))
+	    (setq user-ids (acons (intern (format "%s" from_id)) (vkontakte-get-username from_id) user-ids)))
+	  (setq username (cdr (assoc (intern (format "%s" from_id)) user-ids)))
+	  (setq body (decode-coding-string (cdr (assoc 'body message)) 'utf-8))
+	  (setq message-info (format "%s %s %s: %s\n"
+				     read_state
+				     from_id
+				     username
+				     body))
 	  (with-current-buffer vkontakte-dialog-buffer
 	    (insert-string "--------------------\n")
 	    (insert-string message-info)
