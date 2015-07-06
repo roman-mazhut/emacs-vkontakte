@@ -64,7 +64,7 @@
 
 (defun vkontakte-get-dialogs ()
   (with-current-buffer
-      (url-retrieve-synchronously (format vk_api_url "messages.getDialogs" "param=1" access_token))
+      (url-retrieve-synchronously (format vk_api_url "messages.getDialogs" "count=15" access_token))
     (goto-char (point-min))
     (search-forward "\n\n")
     (delete-region (point-min) (point))
@@ -94,6 +94,7 @@
   (setq vkontakte-dialog-buffer (get-buffer-create (format "*VK %s*" friend-id)))
   (set-buffer vkontakte-dialog-buffer)
   (erase-buffer)
+  (font-lock-mode 1)
   (setq vkontakte-message-history (vkontakte-get-messages-history friend-id))
   (setq user-ids '())
   (loop for message being the elements of (reverse vkontakte-message-history)
@@ -105,11 +106,11 @@
 	    (setq user-ids (acons (intern (format "%s" from_id)) (vkontakte-get-username from_id) user-ids)))
 	  (setq username (cdr (assoc (intern (format "%s" from_id)) user-ids)))
 	  (setq body (decode-coding-string (cdr (assoc 'body message)) 'utf-8))
-	  (setq message-info (format "%s %s %s: %s\n"
-				     read_state
+	  (setq message-info (format "%s %s: %s\n"
 				     from_id
 				     username
 				     body))
+	  (setq message-info (propertize message-info 'font-lock-face `(:foreground ,(if (eq read_state 1) "green" "red"))))
 	  (with-current-buffer vkontakte-dialog-buffer
 	    (insert-string "--------------------\n")
 	    (insert-string message-info)
@@ -127,19 +128,55 @@
   (setq vkontakte-friends-buffer (get-buffer-create "*VK Friends*"))
   (set-buffer vkontakte-friends-buffer)
   (erase-buffer)
+  (font-lock-mode 1)
   (setq vkontakte-friends (vkontakte-get-friends))
   (loop for friend being the elements of vkontakte-friends
 	do
+	(setq online (cdr (assoc 'online friend)))
+	(setq user_id (cdr (assoc 'user_id friend)))
+	(setq first_name (decode-coding-string (cdr (assoc 'first_name friend)) 'utf-8))
+	(setq last_name (decode-coding-string (cdr (assoc 'last_name friend)) 'utf-8))
 	(setq friend-info (format "%10d %s %s\n"
-				  (cdr (assoc 'user_id friend))
-				  (decode-coding-string (cdr (assoc 'first_name friend)) 'utf-8)
-				  (decode-coding-string (cdr (assoc 'last_name friend)) 'utf-8)))
-	(propertize friend-info 'face '(:foreground-color . "red"))
+				  user_id
+				  first_name
+				  last_name))
+	(print online)
+	(setq friend-info (propertize friend-info 'font-lock-face `(:foreground ,(if (eq online 1) "green" "red"))))
 	(with-current-buffer vkontakte-friends-buffer
-	  (insert-string friend-info))
+	  (insert-string friend-info)
+	  (print friend-info))
 	(local-set-key (kbd "C-c C-o") 'vkontakte-open-dialog-with-current-friend)
 	(local-set-key (kbd "C-c C-w") 'vkontakte-send)
 	(switch-to-buffer vkontakte-friends-buffer)))
+
+(defun vkontakte-draw-dialogs ()
+  (interactive)
+  (setq vkontakte-dialogs-buffer (get-buffer-create "*VK Dialogs*"))
+  (set-buffer vkontakte-dialogs-buffer)
+  (erase-buffer)
+  (font-lock-mode 1)
+  (setq vkontakte-dialogs (vkontakte-get-dialogs))
+  (setq user-ids '())
+  (loop for dialog being the elements of vkontakte-dialogs
+	do
+	(when (listp dialog)
+	  (setq from_id (cdr (assoc 'uid dialog)))
+	  (when (not (assoc (intern (format "%s" from_id)) user-ids))
+	    (setq user-ids (acons (intern (format "%s" from_id)) (vkontakte-get-username from_id) user-ids)))
+	  (setq dialog-name (cdr (assoc (intern (format "%s" from_id)) user-ids)))
+	  (setq read-state (cdr (assoc 'read_state dialog)))
+	  (setq dialog-info (format "%10d %20s | %s: %s\n"
+				    from_id
+				    dialog-name
+				    (if (eq (cdr (assoc 'out dialog)) 1) "Me" dialog-name)
+				    (decode-coding-string (cdr (assoc 'body dialog)) 'utf-8)))
+	  (setq dialog-info (propertize dialog-info 'font-lock-face `(:foreground ,(if (eq read-state 1) "green" "red"))))
+	  (with-current-buffer vkontakte-dialogs-buffer
+	    (insert-string dialog-info)
+	    (insert-string "-------------------------------------\n")))
+	(local-set-key (kbd "C-c C-o") 'vkontakte-open-dialog-with-current-friend)
+	(local-set-key (kbd "C-c C-w") 'vkontakte-send)
+	(switch-to-buffer vkontakte-dialogs-buffer)))
 
 (defun vkontakte-send (message)
   (interactive "Message:")
