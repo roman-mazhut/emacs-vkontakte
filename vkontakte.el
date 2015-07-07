@@ -17,6 +17,7 @@
 (defun vkontakte-get-username (user-id)
   (with-current-buffer
       (url-retrieve-synchronously (format vk_api_url "users.get" (format "user_ids=%s&fields=first_name,last_name" user-id) access_token))
+    (sleep-for 0 300)
     (goto-char (point-min))
     (search-forward "\n\n")
     (delete-region (point-min) (point))
@@ -116,6 +117,7 @@
 	    (insert-string message-info)
 	    (insert-string "--------------------\n"))))
   (local-set-key (kbd "C-c C-w") 'vkontakte-send)
+  (local-set-key (kbd "C-c C-r") (lambda () (interactive) (vkontakte-draw-dialog-with-friend friend-id)))
   (switch-to-buffer vkontakte-dialog-buffer))
 
 (defun vkontakte-open-dialog-with-current-friend ()
@@ -140,14 +142,14 @@
 				  user_id
 				  first_name
 				  last_name))
-	(print online)
 	(setq friend-info (propertize friend-info 'font-lock-face `(:foreground ,(if (eq online 1) "green" "red"))))
 	(with-current-buffer vkontakte-friends-buffer
-	  (insert-string friend-info)
-	  (print friend-info))
+	  (insert-string friend-info)))
+	(beginning-of-buffer)
 	(local-set-key (kbd "C-c C-o") 'vkontakte-open-dialog-with-current-friend)
 	(local-set-key (kbd "C-c C-w") 'vkontakte-send)
-	(switch-to-buffer vkontakte-friends-buffer)))
+	(local-set-key (kbd "C-c C-r") 'vkontakte-draw-friends)
+	(switch-to-buffer vkontakte-friends-buffer))
 
 (defun vkontakte-draw-dialogs ()
   (interactive)
@@ -173,10 +175,12 @@
 	  (setq dialog-info (propertize dialog-info 'font-lock-face `(:foreground ,(if (eq read-state 1) "green" "red"))))
 	  (with-current-buffer vkontakte-dialogs-buffer
 	    (insert-string dialog-info)
-	    (insert-string "-------------------------------------\n")))
+	    (insert-string "-------------------------------------\n"))))
+	(beginning-of-buffer)
 	(local-set-key (kbd "C-c C-o") 'vkontakte-open-dialog-with-current-friend)
 	(local-set-key (kbd "C-c C-w") 'vkontakte-send)
-	(switch-to-buffer vkontakte-dialogs-buffer)))
+	(local-set-key (kbd "C-c C-r") 'vkontakte-draw-dialogs)
+	(switch-to-buffer vkontakte-dialogs-buffer))
 
 (defun vkontakte-send (message)
   (interactive "Message:")
